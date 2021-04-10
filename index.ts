@@ -6,11 +6,15 @@ import {
   WebSocket 
 } from "./deps.ts";
 
+import RoomsManager from './RoomsManager.ts';
+
 const sockets = new Set<WebSocket>();
 
 class WebSocketServer {
   private port: number;
-  private rooms: Record<string, { users: { name: string, socket: WebSocket }[] }> = {};
+
+  // TODO: remember memory is finite :) 
+  private roomsManager = new RoomsManager();
 
   constructor(port = 8080) {
     this.port = port;
@@ -86,35 +90,17 @@ class WebSocketServer {
   handleLogin(message: Record<string, unknown>, sock: WebSocket) {
     const { userName, room } = message;
 
-    // TODO: refacator the heck out of this. A room can defo be its own class.
-
     if ([userName, room].some(x => typeof x !== 'string' || !x)) {
       sock.send("userName and room are required:");
       sock.close();
       return;
     }
 
-    if (this.rooms[room as string]) {
-      console.log('Room exists!');
-
-      if (this.rooms[room as string].users.some(user => user.name === userName)) {
-        sock.send('Username is taken!')
-      } else {
-        this.rooms[room as string].users.push({ name: userName as string, socket: sock })
-
-        this.rooms[room as string].users.forEach(user => {
-          user.socket.send(`Everbody welcome ${userName}!`)
-        })
-      }
-    } else {
-      this.rooms[room as string] = {
-        users: [{ name: userName as string, socket: sock }]
-      }
-
-      sock.send(`New room ${room} created!`)
-    }
+    this.roomsManager.join(
+      room as string,
+      { name: userName as string, socket: sock }
+    );
   }
-
 }
 
 if (import.meta.main) {
