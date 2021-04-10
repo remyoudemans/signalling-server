@@ -8,13 +8,12 @@ import {
 
 import RoomsManager from './RoomsManager.ts';
 
-const sockets = new Set<WebSocket>();
-
 class WebSocketServer {
   private port: number;
 
   // TODO: remember memory is finite :) 
   private roomsManager = new RoomsManager();
+  private socketToUserInRoomMap = new Map<WebSocket, { userName: string, roomName: string }>();
 
   constructor(port = 8080) {
     this.port = port;
@@ -41,7 +40,6 @@ class WebSocketServer {
 
   async handleWs(sock: WebSocket) {
     console.log("socket connected!");
-    sockets.add(sock);
     try {
       for await (const ev of sock) {
         if (typeof ev === "string") {
@@ -54,7 +52,6 @@ class WebSocketServer {
             message = {};
           }
 
-          sock.send(`Length: ${sockets.size}`);
           this.handleJsonMessage(message, sock);
         } else if (ev instanceof Uint8Array) {
           console.log("ws:Binary", ev);
@@ -64,7 +61,12 @@ class WebSocketServer {
         } else if (isWebSocketCloseEvent(ev)) {
           const { code, reason } = ev;
           console.log("ws:Close", code, reason);
-          sockets.delete(sock);
+          const { roomName, userName } = this.socketToUserInRoomMap.get(sock) || {};
+
+          if (roomName && userName) {
+            this.roomsManager.removeUserFromRoom(userName, roomName);
+            this.socketToUserInRoomMap.delete(sock);
+          }
         }
       }
     } catch (err) {
@@ -88,18 +90,20 @@ class WebSocketServer {
   }
 
   handleLogin(message: Record<string, unknown>, sock: WebSocket) {
-    const { userName, room } = message;
+    const { userName, room: roomName } = message;
 
-    if ([userName, room].some(x => typeof x !== 'string' || !x)) {
-      sock.send("userName and room are required:");
+    if (typeof userName !== 'string' || !userName.length || typeof roomName !== 'string' || !roomName.length) {
+      sock.send("userName and roomName are required:");
       sock.close();
       return;
     }
 
     this.roomsManager.join(
-      room as string,
-      { name: userName as string, socket: sock }
+      roomName,
+      { name: userName, socket: sock }
     );
+
+    this.socketToUserInRoomMap.set(sock, { userName, roomName });
   }
 }
 

@@ -37,6 +37,14 @@ class Room {
       socket.send(`Everbody welcome ${user.name}!`)
     })
   }
+
+  removeUser(userName: string) {
+    this.users = this.users.filter(user => user.name !== userName);
+  }
+
+  get length() {
+    return this.users.length;
+  }
 }
 
 export default class RoomsManager {
@@ -54,7 +62,7 @@ export default class RoomsManager {
   join(roomName: string, user: RoomUser) {
     if (!this.roomExists(roomName)) {
       this.rooms[roomName] = new Room(roomName, user);
-      user.socket.send(`New room ${roomName} created!`);
+      user.socket.send(`New roomName ${roomName} created!`);
       return;
     }
 
@@ -66,5 +74,17 @@ export default class RoomsManager {
     }
 
     room.addUser(user);
+  }
+
+  removeUserFromRoom(userName: string, roomName: string) {
+    const room = this.rooms[roomName];
+
+    if (room && room.hasUser(userName)) {
+      room.removeUser(userName);
+
+      if (room.length === 0) {
+        delete this.rooms[roomName];
+      }
+    }
   }
 }
