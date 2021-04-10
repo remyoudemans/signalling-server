@@ -1,31 +1,41 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
-import { serve } from "https://deno.land/std@0.92.0/http/server.ts";
 import {
+  serve,
   acceptWebSocket,
   isWebSocketCloseEvent,
   isWebSocketPingEvent,
-  WebSocket,
-} from "https://deno.land/std@0.92.0/ws/mod.ts";
+  WebSocket 
+} from "./deps.ts";
+
+import handleJsonMessage from './handleJsonMessage.ts';
+
+const sockets = new Set<WebSocket>();
 
 async function handleWs(sock: WebSocket) {
   console.log("socket connected!");
+  sockets.add(sock);
   try {
     for await (const ev of sock) {
       if (typeof ev === "string") {
-        // text message.
         console.log("ws:Text", ev);
-        await sock.send(ev);
+        let message;
+
+        try {
+          message = JSON.parse(ev);
+        } catch {
+          message = {};
+        }
+
+        sock.send(`Length: ${sockets.size}`);
+        handleJsonMessage(message, sock);
       } else if (ev instanceof Uint8Array) {
-        // binary message.
         console.log("ws:Binary", ev);
       } else if (isWebSocketPingEvent(ev)) {
         const [, body] = ev;
-        // ping.
         console.log("ws:Ping", body);
       } else if (isWebSocketCloseEvent(ev)) {
-        // close.
         const { code, reason } = ev;
         console.log("ws:Close", code, reason);
+        sockets.delete(sock);
       }
     }
   } catch (err) {
