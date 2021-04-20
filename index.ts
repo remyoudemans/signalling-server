@@ -84,6 +84,10 @@ class WebSocketServer {
         console.log('Trying to login!');
         this.handleLogin(message, sock);
         break;
+      case 'signal':
+        console.log('Got a signal');
+        this.handleSignal(message, sock);
+        break;
       default:
         console.log(`Unrecognized message type: ${message.type}`);
     }
@@ -104,6 +108,34 @@ class WebSocketServer {
     );
 
     this.socketToUserInRoomMap.set(sock, { userName, roomName });
+  }
+
+  handleSignal(message: Record<string, unknown>, sock: WebSocket) {
+    const { data } = message;
+    console.log('signal handling');
+
+    const { roomName, userName } = this.socketToUserInRoomMap.get(sock) || {};
+
+    if (!roomName) {
+      sock.send(JSON.stringify({ type: 'error', message: 'You are not in a room. Closing' }));
+      sock.close();
+      return;
+    }
+
+    const room = this.roomsManager.rooms[roomName];
+
+    if (!room) {
+      sock.send(JSON.stringify({ type: 'error', message: 'Room does not exist' }));
+    }
+
+    room.users.forEach(user => {
+      if (user.name === userName) {
+        // don't signal to yourself
+        return;
+      }
+
+      user.socket.send(JSON.stringify({ type: 'signal', data }))
+    })
   }
 }
 
